@@ -1,4 +1,4 @@
-# 🚀 VSDIAT Week 6, Day 1: Inception of OpenLANE and Sky130
+# 🚀 Day 1: Inception of OpenLANE and Sky130
 
 ## 📝 Overview
 
@@ -12,7 +12,7 @@ This document details the learnings and lab work from Day 1 of Week 6, focusing 
 
 This section covered the hierarchy of translating human-readable software applications into physical hardware operations. A high-level language like C++ or Java is first compiled into **assembly language**, which is a low-level, human-readable representation of machine instructions. An **assembler** then translates this into binary **machine code** (the 1s and 0s) that the hardware can directly execute.
 
-> [Image: Flow.jpg]
+> <img width="1920" height="1080" alt="Flow" src="https://github.com/user-attachments/assets/7edad297-3a9e-48db-9bc7-0a07afe1ea28" />
 
 ### 1.2 📦 Introduction to QFN-48 Package, Chip, Pads, Core, Die, and IPs
 
@@ -26,9 +26,9 @@ A chip is not just the silicon die but a complete system integrated into a packa
       * **Foundry IPs:** Provided by the fabrication plant (e.g., ADC, DAC, SRAMs).
       * **Macros:** IPs that you design or acquire (e.g., RISC-V SoC, SPI controller).
 
-> [Image: Day - 1 Arduino proccesor.jpg]
+> <img width="1546" height="846" alt="Day - 1 Arduino proccesor" src="https://github.com/user-attachments/assets/6bd81ec0-c622-462f-badb-08f7cf23ac9a" />
 >
-> [Image: SOC Day-1.jpg]
+> <img width="1522" height="835" alt="SOC Day-1" src="https://github.com/user-attachments/assets/c73946ac-d9bd-4f76-877d-db1abd043dce" />
 
 ### 1.3 🏛️ Introduction to RISC-V
 
@@ -37,9 +37,9 @@ A chip is not just the silicon die but a complete system integrated into a packa
   * It acts as the fundamental "architecture" of a computer, defining the set of instructions the processor can execute.
   * This open standard is a perfect match for an open-source EDA flow, allowing for truly open-source hardware design from the ISA all the way to the physical layout.
 
-> [Image: Stop watch - Riscv.jpg]
+> <img width="1920" height="1080" alt="Stop watch - Riscv" src="https://github.com/user-attachments/assets/d7e64044-ee8a-4655-a2ce-f5ad56bcbaaa" />
 >
-> [Image: Flow Riscv.jpg]
+> <img width="1920" height="1080" alt="Flow Riscv" src="https://github.com/user-attachments/assets/42cd3571-c9f6-4aeb-988b-d590e5a0d20f" />
 
 ### 1.4 🔄 From Software Applications to Hardware
 
@@ -83,7 +83,7 @@ The high-level steps are:
 
 Converts the abstract RTL (Verilog) into a circuit of components (logic gates, flip-flops) from the PDK's **Standard Cell Library (SCL)**.
 
-> [Image: Synthesis.jpg]
+><img width="1856" height="1006" alt="Synthesis" src="https://github.com/user-attachments/assets/77572e69-092c-4c8f-aa18-733e82e69421" />
 
 #### b) Floor & Power Planning
 
@@ -101,7 +101,7 @@ Places all the standard cells from the synthesized netlist onto the floorplan ro
 
 Builds a dedicated network (a "tree") to deliver the clock signal to all sequential elements (like flip-flops) with minimum and balanced delay (**skew**). This is often done using **H-Trees** or **X-Trees**.
 
-> [Image: CTS - Design Flow.png]
+> <img width="1170" height="412" alt="CTS - Design Flow" src="https://github.com/user-attachments/assets/395f1cb3-1789-4220-a68a-6a8ae6ed8dd5" />
 
 #### e) Routing
 
@@ -126,13 +126,13 @@ The final verification stage to ensure the design is manufacturable and function
 
 The **strive SoC Family** (strive, strive2, strive3, etc.) are real-world examples of chips that were successfully taped out using OpenLANE and the Sky130 PDK, proving the viability of this open-source flow.
 
-> [Image: Strive Family Soc.jpg]
+><img width="1721" height="881" alt="Strive Family Soc" src="https://github.com/user-attachments/assets/cdc6e2cb-8267-4aec-8519-08c23e2fde27" />
 
 ### 2.4 📋 Introduction to OpenLANE Detailed ASIC Design Flow
 
 We examined the detailed OpenLANE flow chart, which shows the interaction between tools.
 
-> [Image: Opwn Lane Asic Flow.jpg]
+><img width="1777" height="948" alt="Opwn Lane Asic Flow" src="https://github.com/user-attachments/assets/0b984916-5f7e-4cb9-ad2e-d5db4e0ac1c9" />
 
 Key concepts discussed:
 
@@ -142,34 +142,27 @@ Key concepts discussed:
   * **Challenges:** We also discussed real-world fabrication challenges like the **Antenna Effect**, where long metal wires can accumulate charge during fabrication and damage transistor gates. OpenLANE inserts "Antenna Diodes" to safely discharge this static buildup.
 
 -----
-
 ## 3\. 🔬 Getting Familiar with Open Source EDA Tools (Lab)
 
-This section covers the hands-on lab work, where we set up and ran the OpenLANE flow for the first time.
+This section covers the hands-on lab work, where we set up and ran the OpenLANE flow for the first time, exploring the interactive mode and the synthesis stage.
 
-### 3.1 🛠️ Lab Setup: Fixing the PDK Path
+### 3.1 🛠️ Lab Setup: Setting the PDK Path
 
-A common setup issue is OpenLANE failing to find the Process Design Kit (PDK) files. The following steps were used to correct the environment variable and point OpenLANE to the correct PDK directory.
-
-First, navigate to the `openlane_working_dir`:
+To begin, we start from a fresh terminal. The first step is to navigate to the correct working directory and set the `PDK_ROOT` environment variable. This variable is critical as it tells OpenLANE where to find all the foundry-specific files (libraries, models, etc.).
 
 ```bash
-# We were in .../designs/picorv32a, so we go up three levels
-cd ../../..
-# Now we are in ~/Desktop/work/tools/openlane_working_dir
-```
+# Navigate to the openlane working directory from home
+cd ~/Desktop/work/tools/openlane_working_dir
 
-Next, set the `PDK_ROOT` environment variable to the correct path:
-
-```bash
+# Set the PDK_ROOT environment variable
 export PDK_ROOT=$(pwd)/pdks
 ```
 
-This command tells the system that the PDKs are located in the `pdks` folder inside the current working directory.
+This command tells the system that the PDKs are located in the `pdks` folder inside our current working directory.
 
 ### 3.2 🐳 Running the OpenLANE Flow
 
-With the path corrected, we can now enter the OpenLANE Docker container and start the flow.
+With the path corrected, we can now enter the OpenLANE Docker container, which provides a consistent environment with all the necessary EDA tools pre-installed.
 
 ```bash
 # Navigate into the openlane directory
@@ -179,19 +172,15 @@ cd openlane
 docker
 ```
 
-> [Image: Open lane.jpg]
-
 Once inside the Docker container (prompt changes to `bash-4.2$`), we start the OpenLANE flow in **interactive mode**.
 
 ```bash
 ./flow.tcl -interactive
 ```
 
-This starts the Tcl shell (prompt changes to `%`).
-
 ### 3.3 ⚙️ Design Preparation Step
 
-Inside the Tcl shell, we first load the OpenLANE package and then prepare our design, `picorv32a`.
+Inside the Tcl shell (prompt changes to `%`), we first load the OpenLANE package and then prepare our design, `picorv32a`.
 
 ```tcl
 # Load the OpenLANE package
@@ -201,11 +190,15 @@ package require openlane 0.9
 prep -design picorv32a
 ```
 
+> <img width="1920" height="1080" alt="Prep of picorev" src="https://github.com/user-attachments/assets/54b8fe6e-cbe7-4d33-af23-7dcd58d3636a" />
+
 This `prep` command:
 
 1.  Finds the design's `config.tcl` file (in `designs/picorv32a/`).
 2.  Merges it with the default PDK and flow-level configurations.
-3.  Creates a new `run` directory (e.g., `runs/RUN_...`) where all outputs for this specific run will be stored.
+3.  Creates a new `run` directory (e.g., `runs/RUN_2025-10-31_18-12-59`) where all outputs for this specific run will be stored. We can see the creation of `logs`, `results`, `tmp`, and other directories.
+
+> <img width="1920" height="1080" alt="After prep results" src="https://github.com/user-attachments/assets/ce0edb24-44c3-46ec-8e96-a564182c544c" />
 
 ### 3.4 📊 Running and Characterizing Synthesis
 
@@ -219,6 +212,30 @@ This command automatically:
 
 1.  Uses **Yosys** to synthesize the Verilog code into a gate-level netlist.
 2.  Performs **Static Timing Analysis (STA)** with OpenSTA to get an initial timing estimate.
-3.  Generates the gate-level netlist (`.v` file) and various reports in the `runs/<run_name>/results/synthesis` directory.
+3.  Generates the gate-level netlist (`.v` file) and various reports.
 
-After the run, we inspected the synthesis reports (`*.synthesis.rpt`) and found key metrics for the `picorv32a` design, such as the total count of D-flip-flops (DFFs) used, which was **1634**.
+The screenshot below shows the `run_synthesis` command completing successfully.
+
+><img width="1920" height="1080" alt="Synthesis" src="https://github.com/user-attachments/assets/e16fff64-ba63-4b7a-b788-30abbd2e120c" />
+
+After the run, we inspected the generated files. We navigated to the `results/synthesis` directory to find the synthesized netlist (`picorv32a.synthesis.v`).
+
+```bash
+# To check the results
+cd runs/RUN_2025-10-31_18-12-59/results/synthesis
+ls -ltr
+```
+
+> <img width="1920" height="1080" alt="Resulsts" src="https://github.com/user-attachments/assets/328b6682-3c1e-4987-b10e-f67f981d3774" />
+
+We can also check the `reports/synthesis` directory for synthesis statistics and logs.
+
+```bash
+# To check the reports
+cd runs/RUN_2025-10-31_18-12-59/reports/synthesis
+ls -ltr
+```
+
+><img width="1920" height="1080" alt="Screenshot from 2025-10-31 19-12-38" src="https://github.com/user-attachments/assets/b8c708e0-a4b9-453b-8593-e1a2117dced4" />
+
+By examining the `*.synthesis.rpt` files, we found key metrics for the `picorv32a` design, such as the total count of D-flip-flops (DFFs) used, which was **1634**.
