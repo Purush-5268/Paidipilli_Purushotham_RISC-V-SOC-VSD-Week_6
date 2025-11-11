@@ -239,3 +239,55 @@ ls -ltr
 ><img width="1920" height="1080" alt="Screenshot from 2025-10-31 19-12-38" src="https://github.com/user-attachments/assets/b8c708e0-a4b9-453b-8593-e1a2117dced4" />
 
 By examining the `*.synthesis.rpt` files, we found key metrics for the `picorv32a` design, such as the total count of D-flip-flops (DFFs) used, which was **1634**.
+
+### Calculate the Flop Ratio
+
+After synthesis (`run_synthesis`), the flow converts the Verilog RTL code into a gate-level netlist based on the standard cell library. The tool generates reports in the `runs/.../reports/synthesis/` directory, which we use to calculate the flop ratio.
+
+We will look at two different statistics files:
+1.  **Pre-Synthesis Statistics:** The initial Yosys report showing generic cell types.
+2.  **Post-Synthesis Statistics:** The final report after mapping the design to the `sky130` standard cell library.
+
+---
+
+#### Pre-Synthesis Statistics
+
+This report shows the initial statistics from the synthesis tool (Yosys) *before* the cells are mapped to the specific `sky130` library. It uses generic cell names (like `$_DFFE_PP_` for flip-flops) and gives a general idea of the design's components.
+
+
+
+> This report shows a total of **16813** cells and various D-type flip-flops (e.g., `$_DFFE_PP_`, `$_DFF_P_`) that sum up to our initial flip-flop count. For our final calculation, we must use the **post-mapping** statistics.
+
+---
+
+#### Post-Synthesis Statistics (Used for Calculation)
+
+This is the most important report. It shows the final statistics *after* the design has been "mapped" to the `sky130_fd_sc_hd` library. The generic cells from the previous step are now replaced with specific, real cells from the library (like `sky130_fd_sc_hd__dfxtp_2`).
+
+From this report, we extract our two key values:
+
+* **Total Number of Cells:** The final count of all standard cells.
+* **Number of D Flip-Flops:** The count for the specific D-type flip-flop cell used, which is `sky130_fd_sc_hd__dfxtp_2`.
+
+
+
+From the image, we can clearly identify:
+* **Total Number of Cells:** 14876
+* **Number of D Flip-Flops (`sky130_fd_sc_hd__dfxtp_2`):** 1613
+
+---
+
+#### Flop Ratio Calculation
+
+Now we can use these numbers to calculate the Flop Ratio.
+
+**Flop Ratio Formula:**
+$$Flop \ Ratio = \frac{Number \ of \ D \ Flip-Flops}{Total \ Number \ of \ Cells}$$
+
+**Calculation:**
+$$Flop \ Ratio = \frac{1613}{14876} \approx 0.108429...$$
+
+**Percentage:**
+$$0.1084 \times 100 \approx 10.84 \ %$$
+
+> **Tip:** A typical digital design has a flop ratio between 5% and 15%, depending on its complexity and architecture. Our result of 10.84% is a healthy and expected value.
