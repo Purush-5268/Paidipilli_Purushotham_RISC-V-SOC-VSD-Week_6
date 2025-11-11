@@ -222,7 +222,7 @@ After the run, we inspected the generated files. We navigated to the `results/sy
 
 ```bash
 # To check the results
-cd runs/RUN_2025-10-31_18-12-59/results/synthesis
+cd openlane/designs/picorv32a/runs/10-31_18-12-59/results/synthesis
 ls -ltr
 ```
 
@@ -232,7 +232,7 @@ We can also check the `reports/synthesis` directory for synthesis statistics and
 
 ```bash
 # To check the reports
-cd runs/RUN_2025-10-31_18-12-59/reports/synthesis
+cd openlane/designs/picorv32a/runs/10-31_18-12-59/reports/synthesis
 ls -ltr
 ```
 
