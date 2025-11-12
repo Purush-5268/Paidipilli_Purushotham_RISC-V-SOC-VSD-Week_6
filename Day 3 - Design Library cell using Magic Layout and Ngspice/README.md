@@ -1,198 +1,252 @@
-## 📅 Day 3: Cell Design, Layout, & Characterization
-
+## 📅 Day 3: Cell Design, Layout, & Characterization 
 This day is broken into three parts:
-
-1.  **Part 1:** Revisiting IO placement, understanding SPICE simulation, and cloning the `vsdstdcelldesign` lab.
-2.  **Part 2:** Inspecting the inverter layout, understanding the CMOS fabrication process, and extracting a SPICE netlist *from* the layout.
-3.  **Part 3:** Building a testbench for the extracted netlist, running the post-layout SPICE simulation, and introducing Magic's DRC (Design Rule Check) system.
-
------
-
+1. **Part 1:** Revisiting IO placement, understanding SPICE simulation, and cloning the vsdstdcelldesign lab.
+2. **Part 2:** Inspecting the inverter layout, understanding the CMOS fabrication process, and extracting a SPICE netlist *from* the layout.
+3. **Part 3:** Building a testbench for the extracted netlist, running the post-layout SPICE simulation, and introducing Magic's DRC (Design Rule Check) system.
+---
 ### Part 1: IO Placer & SPICE Simulation Setup
-
-<details> <summary><h3>💡 Concept: CMOS Inverter Simulation</h3></summary>
-
------
+<details><summary><b>💡 Concept: CMOS Inverter Simulation</b></summary>
 
 #### 📜 SPICE Deck Creation for CMOS Inverter
+A **SPICE deck** (or netlist) describes circuit connectivity and component parameters. It’s the foundation for characterizing a cell such as a CMOS inverter.  
+To simulate it correctly, we create a testbench with these key steps:
+1. **Instantiating the Inverter:** Call the inverter subcircuit (`.subckt`).
+2. **Adding Power Supplies:** Connect `VDD` and `GND` voltage sources (e.g., 2.5 V and 0 V).
+3. **Adding Stimulus:** Use a `VPULSE` source at the input to generate a switching waveform.
+4. **Adding Load:** Add a capacitor (`Cload = 10 fF`) at the output to model load of next-stage gates.
+5. **Simulation Commands:** `.dc` for DC sweep, `.tran` for transient analysis.
 
-A **SPICE deck** (or netlist) is the text-based description of a circuit. To characterize a cell (like an inverter), we must create a testbench. This involves:
+#### ⚡ Component Connectivity & Node Naming
+Each MOSFET requires correct node connections:
+- **PMOS (M1):** Drain → out, Gate → in, Source + Substrate → VDD  
+- **NMOS (M2):** Drain → out, Gate → in, Source + Substrate → 0 (GND)
 
-1.  **Instantiating the Inverter:** Calling the inverter "subcircuit" (`.subckt`).
-2.  **Adding Power:** Providing VDD and GND voltage sources.
-3.  **Adding Stimulus:** Attaching a `VPULSE` source to the input to create a rising/falling signal.
-4.  **Adding a Load:** Attaching a capacitor (`Cload`) to the output to simulate the load of the next gates and wires.
-5.  **Adding Commands:** Telling SPICE what to do (`.tran` for transient analysis, `.measure` to calculate delays).
+We define nodes like **Vin, Vout, VDD, 0**. The substrate pin tunes transistor threshold voltage.
 
-#### ⚡ Switching Threshold ($V_m$)
+#### ⚙️ Model Files
+Model files include NMOS/PMOS parameters from the Sky130 PDK for realistic simulation.
 
-The **Switching Threshold ($V_m$)** is a critical metric for a CMOS inverter. It is the input voltage ($V_{in}$) at which the output voltage ($V_{out}$) is equal.
+#### ⚡ Switching Threshold (Vm)
+The **Switching Threshold (Vm)** occurs when `Vin = Vout`.  
+- Ideally ≈ `VDD / 2` for a balanced inverter.  
+- In practice, depends on PMOS/NMOS width ratio (βp / βn).  
+Sweeping Vin from 0 → 2.5 V using `.dc` identifies Vm.  
+If both transistors conduct near Vm, short current flows (VDD → GND).
 
-  * $V_{in} = V_{out}$
-  * Theoretically, for a perfectly symmetrical inverter, this is $V_{DD} / 2$.
-  * In practice, it depends on the PMOS-to-NMOS size ratio ($\beta_p / \beta_n$). We simulate this using a `.dc` analysis, sweeping $V_{in}$ from 0 to VDD and plotting $V_{out}$ vs. $V_{in}$ to find the crossover point.
+> Increasing PMOS width (e.g., 3× NMOS) centers the transfer curve and improves noise margin.
 
-#### 📊 Static and Dynamic Simulation
-
-  * **Static Simulation (`.dc`):** Used to find DC properties like $V_m$ or to check for power leakage. It does not involve time.
-  * **Dynamic Simulation (`.tran`):** A **transient** analysis that simulates the circuit's behavior *over time*. This is what we use to measure propagation delay, rise time, and fall time, as it shows us the actual waveforms.
-
+#### 📊 Static vs Dynamic Simulation
+- **Static (.dc):** Measures Vm and leakage.  
+- **Dynamic (.tran):** Measures rise/fall delays and propagation time.
 </details>
+<details><summary><b>🔬 Lab: IO Placer Revision & vsdstdcelldesign Clone</b></summary>
 
-<br>
-
-<details> <summary><h3>🔬 Lab: IO Placer Revision & vsdstdcelldesign Clone</h3></summary>
------
-
-#### 🔄 Lab: IO Placer Revision
-
-In OpenLANE, we can control how I/O pins are placed. The default is equidistant (`set ::env(FP_IO_MODE) 1`). We will change this to `2` to see the effect.
-
-1.  **Change the configuration:**
-
-    ```bash
-    # Navigate to the configurations directory
-    cd Desktop/work/tools/openlane_working_dir/openlane/configurations
-    # Edit the floorplan.tcl file (e.g., using vim)
-    less floorplan.tcl
-    ```
-
-    > <img width="1920" height="1080" alt="less floorplantcl" src="https://github.com/user-attachments/assets/380b50ff-47d3-4877-8d47-d48183425fdd" />
-
-2.  **Inside the OpenLANE interactive shell:**
-
-    ```tcl
-    # Set the IO mode to 2 
-    set ::env(FP_IO_MODE) 2
-
-    # Re-run the floorplan
-    run_floorplan
-    ```
-
-    > <img width="1920" height="1080" alt="Set 2 floorplan" src="https://github.com/user-attachments/assets/b4077c80-fabd-46cb-8644-04c2a7418bb6" />
-
-3.  **View the new floorplan:** We can now open the new `picorv32a.floorplan.def` file in Magic and see that the pins are no longer equidistant; they are clustered on the left side.
-
-    ```bash
-    # Navigate to the new results directory and open Magic
-    cd Desktop/work/tools/openlane_working_dir/openlane/designs/picorv32a/runs/<NEW_RUN_DIR>/results/floorplan
-    magic -T ... lef read ... def read picorv32a.floorplan.def &
-    ```
-
-    > <img width="1920" height="1080" alt="Magic after set 2 " src="https://github.com/user-attachments/assets/d484ba17-f382-4ea5-8ddf-bfb015d233fa" />
-
------
-
-#### 📦 Lab: Cloning `vsdstdcelldesign`
-
-Next, we clone the repository containing the inverter layout (`.mag` file) that we will use for the rest of the labs.
+#### 🔄 IO Placer Revision
+In OpenLANE, IO pins’ distribution is controlled by `FP_IO_MODE`.  
+Default `1` = equidistant pins.  
+Setting `2` clusters them on one side for custom floorplans.
 
 ```bash
-# Change directory to openlane
-cd Desktop/work/tools/openlane_working_dir/openlane
+# Navigate to the configurations directory
+cd Desktop/work/tools/openlane_working_dir/openlane/configurations
+less floorplan.tcl
+````
 
-# Clone the repository with custom inverter design
+> <img width="1920" height="1080" alt="less floorplantcl" src="https://github.com/user-attachments/assets/380b50ff-47d3-4877-8d47-d48183425fdd" />
+
+Inside OpenLANE interactive shell:
+
+```tcl
+set ::env(FP_IO_MODE) 2
+run_floorplan
+```
+
+> <img width="1920" height="1080" alt="Set 2 floorplan" src="https://github.com/user-attachments/assets/b4077c80-fabd-46cb-8644-04c2a7418bb6" />
+
+View floorplan in Magic:
+
+```bash
+cd Desktop/work/tools/openlane_working_dir/openlane/designs/picorv32a/runs/<NEW_RUN_DIR>/results/floorplan
+magic -T ... lef read ... def read picorv32a.floorplan.def &
+
+# or alternatively, you can use the full path command below:
+magic -T /home/purush/Desktop/work/tools/Openlane_working_dir/pdks/sky130A/libs.tech/magic/sky130A.tech lef read ../../tmp/merged.lef def read picorv32a.floorplan.def &
+
+```
+
+> <img width="1920" height="1080" alt="Magic after set 2 " src="https://github.com/user-attachments/assets/d484ba17-f382-4ea5-8ddf-bfb015d233fa" />
+
+Pins now appear clustered, not equidistant — confirming mode change.
+
+#### 📦 Cloning `vsdstdcelldesign`
+
+Clone the repository to access the CMOS inverter layout:
+
+```bash
+cd Desktop/work/tools/openlane_working_dir/openlane
 git clone https://github.com/nickson-jose/vsdstdcelldesign
 ```
 
 > <img width="1920" height="1080" alt="gitclone" src="https://github.com/user-attachments/assets/c9c18c99-2680-4ef6-a980-5b413aaf8c76" />
 
 ```bash
-# Change into repository directory
 cd vsdstdcelldesign
-
-# Copy magic tech file to the repo directory for easy access
 cp /home/vsduser/Desktop/work/tools/openlane_working_dir/pdks/sky130A/libs.tech/magic/sky130A.tech .
-
-# Check contents whether everything is present
 ls
-
-# Command to open custom inverter layout in magic
 magic -T sky130A.tech sky130_inv.mag &
 ```
 
-><img width="1920" height="1080" alt="Magic command to open inv" src="https://github.com/user-attachments/assets/ba6379a3-92ad-4685-9609-21d5a8422b4a" />
+> <img width="1920" height="1080" alt="Magic command to open inv" src="https://github.com/user-attachments/assets/ba6379a3-92ad-4685-9609-21d5a8422b4a" />
+
+Opens the **custom inverter layout** with Sky130A tech file.
+You can inspect layers like diffusion, poly, contacts, and metals forming the inverter.
 
 </details>
 
------
+### Part 2 – Layout Inspection & SPICE Extraction  
 
------
+<details><summary><b>💡 Theory: CMOS Fabrication Process</b></summary>
 
-### Part 2: Layout Inspection & Spice Extraction
+### Create Active Regions  
+We begin with a P-type silicon substrate (5–50 Ω·cm, (100) orientation).  
+A 40 nm SiO₂ layer is first deposited for insulation, followed by an 80 nm Si₃N₄ layer to serve as an oxidation barrier.  
+Then, a photoresist (~1 µm) is deposited over the wafer, and **Mask 1** is used for UV exposure to define the active transistor regions.  
+After exposure, the unwanted photoresist is removed, revealing the regions for etching.  
+Si₃N₄ is etched in the exposed regions, and photoresist is stripped.  
+The wafer undergoes **LOCOS oxidation** (Local Oxidation of Silicon) to grow thick SiO₂, isolating PMOS and NMOS regions.  
+Finally, Si₃N₄ is removed using hot phosphoric acid, leaving distinct transistor pockets.
 
-<details> <summary><h3>💡 Theory: CMOS Fabrication Process</h3></summary>
-A 2D layout in Magic is just a set of colored masks. These masks correspond to the physical steps of the **CMOS fabrication process** that builds the 3D transistor structures on the silicon wafer.
+><img width="1083" height="493" alt="image" src="https://github.com/user-attachments/assets/84ca689a-f8e5-435e-bbed-e1ed0d631dc9" />
 
-1.  **Create Active Regions:** The process starts with a base P-type silicon wafer. A mask (corresponding to the `diff` or `active` layer) is used to define the areas where transistors will be built.
-2.  **Form N-well and P-well:** To build PMOS transistors (which require an N-type substrate), an "N-well" is created by implanting N-type ions into the P-substrate. The P-well (for NMOS) is the P-substrate itself.
-3.  **Form Gate Terminal:** A very thin layer of silicon dioxide (the "gate oxide") is grown. On top of this, a layer of **polysilicon** is deposited. This layer is then masked and etched (using the `poly` layer mask) to form the gate terminal of the transistors.
-4.  **Lightly Doped Drain (LDD) Formation:** A light "LDD" implant is performed, which helps to create shallow extensions for the source and drain. This improves the transistor's reliability and prevents hot-electron effects.
-5.  **Source & Drain Formation:** A heavier implant of N-type ions (for NMOS) and P-type ions (for PMOS) forms the final **source and drain** terminals. The polysilicon gate itself acts as a mask, "self-aligning" the source and drain implants.
-6.  **Local Interconnect Formation:** A dielectric (insulating) layer is added. "Contacts" (vias) are etched and filled with metal (like `locint` or `li`) to connect to the polysilicon and active regions.
-7.  **Higher Level Metal Formation:** The process is repeated for multiple metal layers (Metal 1, Metal 2, Metal 3, etc.), separated by insulators. Vias are used to connect the different metal layers, wiring the entire circuit together.
+> <img width="1105" height="562" alt="image" src="https://github.com/user-attachments/assets/fedc3932-29b1-4561-8c24-3bb3f407eb84" />
+---
+
+### Formation of N-well and P-well  
+To create separate wells for PMOS and NMOS:  
+Protect one region with photoresist while exposing the other using **Mask 2**.  
+Boron ions (~200 keV) are implanted to form the **P-well**, followed by annealing to activate dopants.  
+Similarly, Phosphorus ions are implanted using **Mask 3** to create the **N-well**.  
+Both wells are then driven into the substrate using high-temperature diffusion.
+
+> <img width="908" height="378" alt="image" src="https://github.com/user-attachments/assets/84d42137-a546-449d-a451-17c010ff09e7" />
+---
+
+### Formation of Gate Terminal  
+The gate terminal controls the threshold voltage (Vth) and transistor behavior.  
+Doping concentration and oxide thickness determine Vth.  
+First, light ion implantation (Boron in P-substrate with Mask 4, Arsenic in N-well with Mask 5) adjusts threshold levels.  
+The damaged oxide is removed with HF and regrown to obtain a high-quality oxide layer.  
+Then, **polysilicon** is deposited, doped for low resistance, and patterned using **Mask 6** to form gate electrodes.
+
+> <img width="957" height="565" alt="image" src="https://github.com/user-attachments/assets/e1b6f6aa-ff89-4b74-b9ff-900fdc3f505a" />
+
+---
+
+### Lightly Doped Drain (LDD) Formation  
+This process reduces hot-carrier and short-channel effects.  
+Using **Mask 7**, a light Phosphorus implant forms N⁻ regions for NMOS.  
+Using **Mask 8**, a light Boron implant forms P⁻ regions for PMOS.  
+After this, a thick SiO₂ or Si₃N₄ layer is deposited and etched anisotropically to form **side-wall spacers** around the gate.
+
+><img width="882" height="556" alt="image" src="https://github.com/user-attachments/assets/e475d203-4d3d-4f16-86fd-06ce29aaf72b" />
+
+---
+
+### Source & Drain Formation  
+A thin screen oxide layer is grown to prevent channeling.  
+- For NMOS: Arsenic (~75 keV) ions are implanted using **Mask 9** to form N⁺ regions.  
+- For PMOS: Boron (~50 keV) ions are implanted using **Mask 10** to form P⁺ regions.  
+Finally, high-temperature annealing (~1000°C) activates dopants and completes source/drain formation.
+
+> <img width="1150" height="498" alt="image" src="https://github.com/user-attachments/assets/f858faae-ed45-4f75-a276-b9b690fa0378" />
+---
+
+### Local Interconnect Formation  
+To create local interconnects, first remove the screen oxide and sputter-deposit **Titanium (Ti)**.  
+When heated (~650–700°C in N₂), Ti reacts with silicon to form **TiSi₂** and **TiN**.  
+TiN acts as a local interconnect and barrier.  
+Using **Mask 11**, unwanted TiN is etched away, forming contacts to gate, source, and drain terminals.
+
+> <img width="1082" height="518" alt="image" src="https://github.com/user-attachments/assets/13e10698-e192-4e78-b3b3-958169906324" />
+---
+
+### Contact Hole Formation  
+Planarize the wafer surface using a dielectric layer and etch holes for metal contacts.  
+This enables electrical connections between different interconnect layers.
+
+><img width="937" height="533" alt="image" src="https://github.com/user-attachments/assets/e54f454a-1dfd-408b-ac1c-8b4c3e84e6e3" />
+
+---
+
+### Higher Level Metal Formation  
+To connect devices globally, planarize the wafer surface with a thick SiO₂ layer via **CMP (Chemical Mechanical Polishing)**.  
+Deposit a TiN (~10 nm) layer as adhesion/barrier, then deposit **Tungsten (W)** for via filling.  
+After planarization, deposit **Aluminum (Al)** for the first metal layer and pattern using **Mask 12–15** to form connections.  
+The top is protected with Si₃N₄ or SiO₂.
+
+> <img width="1125" height="551" alt="image" src="https://github.com/user-attachments/assets/1a7c42ed-376e-4a9d-a1c4-9c14750c1780" />
+
+---
+
+### Final CMOS Structure  
+After completing all metal layers, a final protective Si₃N₄ layer is deposited.  
+This completes the CMOS fabrication with all interconnects and metal routing.
+
+> <img width="981" height="691" alt="image" src="https://github.com/user-attachments/assets/134c8aeb-7c34-4d76-9117-a81e0c26327b" />
 
 </details>
-<br>
-<details> <summary><h3>🔬 Lab: Layout Inspection & Spice Extraction</h3></summary>
------
 
-#### 🔍 Lab: Introduction to Sky130 Layers
+<details><summary><b>🔬 Lab: Layout Inspection, Extraction & Characterization</b></summary>
 
-We use Magic to explore the `sky130_inv.mag` layout, which we opened in the previous lab.
-
+### Lab Introduction to Sky130 Basic Layers Layout and LEF using Inverter  
+We inspect `sky130_inv.mag` using Magic to understand the layer mapping of CMOS transistors.  
 > <img width="1920" height="1080" alt="Layout" src="https://github.com/user-attachments/assets/d380e3dd-7905-4cd5-93d1-730c5bd80cd4" />
 
-We can identify all the components of the CMOS inverter by their layers. We can also use the `what` command in the `tkcon` window after selecting a component.
+Each color in Magic corresponds to a layer in Sky130:  
+- **Red (poly):** Gate terminal  
+- **Green (n-diff):** NMOS active region  
+- **Orange-brown (p-diff):** PMOS active region  
+- **Gray hatch (n-well):** PMOS substrate  
+- **Purple hatch (met1):** Interconnect  
 
-  * **Identify PMOS:** A PMOS transistor is formed where **polysilicon** (red) crosses **P-diffusion** (orange-brown) inside an **N-well** (grayish-hatched).
-     > <img width="1920" height="1080" alt="pmos identified by using what" src="https://github.com/user-attachments/assets/c5cdb891-e17c-4870-8dba-e1ea856cfd95" />
-  * **Identify NMOS:** An NMOS transistor is formed where **polysilicon** (red) crosses **N-diffusion** (green) in the P-substrate.
-    > <img width="1920" height="1080" alt="nmos define what" src="https://github.com/user-attachments/assets/9fffc156-a516-4109-a2c8-46bf4728e577" />
-   
+Use the `what` command in Magic’s tkcon to verify connections.  
+> <img width="1920" height="1080" alt="pmos identified by using what" src="https://github.com/user-attachments/assets/c5cdb891-e17c-4870-8dba-e1ea856cfd95" />  
+> <img width="1920" height="1080" alt="nmos define what" src="https://github.com/user-attachments/assets/9fffc156-a516-4109-a2c8-46bf4728e577" />  
+> <img width="1920" height="1080" alt="Source connections" src="https://github.com/user-attachments/assets/4cc50523-0ad8-46a9-bb48-558f682b3ce3" />
 
-  * **Trace Connections:** We can visually trace the wires:
-      * **Input (A):** The single polysilicon line (red) acts as the gate for both transistors.
-      * **Output (Y):** `Met1` (red-hatched) connects the drain of the PMOS and the drain of the NMOS.
-      * **Power (VPWR/VGND):** `Met1` connects the PMOS source to the `VPWR` rail and the NMOS source to the `VGND` rail.
-    > <img width="1920" height="1080" alt="Source connections" src="https://github.com/user-attachments/assets/4cc50523-0ad8-46a9-bb48-558f682b3ce3" />
+---
 
------
+### Lab Steps to Create Std Cell Layout and Extract SPICE Netlist  
 
-#### ⚡ Lab: Extract Spice Netlist from Layout
+Now that we have a layout, we perform **layout extraction** in Magic.  
+This generates a `.ext` file containing parasitic resistances and capacitances, which can then be converted to a `.spice` file for simulation.
 
-Now that we have a layout, we can use Magic to perform a "layout extraction." This reads the layout geometry (including all the "unwanted" parasitic resistances and capacitances) and generates a **post-layout SPICE netlist**.
+1. **Extract Layout (.ext format)**  
+```tcl
+extract all
+````
 
-1.  In the `tkcon` window in Magic, run the `extract` command. This reads the layout and creates a `.ext` file.
+> <img width="1920" height="1080" alt="Extract command" src="https://github.com/user-attachments/assets/d47f93bb-9b19-42e5-943a-b7b1029bc929" />
 
-    ```tcl
-    # Extraction command to extract to .ext format
-    extract all
-    ```
+2. **Generate SPICE File with Parasitics**
 
-    > <img width="1920" height="1080" alt="Extract command" src="https://github.com/user-attachments/assets/d47f93bb-9b19-42e5-943a-b7b1029bc929" />
+```tcl
+ext2spice cthresh 0 rthresh 0
+ext2spice
+```
 
-2.  Next, we convert the extracted file to a `.spice` file. We include the `cthresh 0 rthresh 0` options to ensure that **all** parasitic capacitors and resistors are extracted, which is critical for an accurate simulation.
+This creates `sky130_inv.spice`, a subcircuit representing the inverter with real-world parasitics.
 
-    ```tcl
-    # Enable parasitic resistance (R) and capacitance (C) extraction
-    ext2spice cthresh 0 rthresh 0
-
-    # Convert the .ext file to a .spice file
-    ext2spice
-    ```
-
-    This generates the file `sky130_inv.spice`. This file is a subcircuit (`.subckt`) that accurately represents our layout, complete with all its real-world parasitic effects.
-    <img width="1920" height="1080" alt="ext2spice " src="https://github.com/user-attachments/assets/df0e3ace-7c9a-4953-a3bb-e5b6b133e8ed" />
+> <img width="1920" height="1080" alt="ext2spice " src="https://github.com/user-attachments/assets/df0e3ace-7c9a-4953-a3bb-e5b6b133e8ed" />
 
 </details>
------
+
+---
 
 ### Part 3: Post-Layout Characterization & DRC
+<details> <summary><b>🔬 Lab: Post-Layout SPICE Characterization</b></summary>
 
-<details> <summary><h3>🔬 Lab: Post-Layout SPICE Characterization</h3></summary>
-
------
+----
 
 #### 🔌 Lab: Create Final SPICE Deck
 
@@ -205,10 +259,8 @@ The `sky130_inv.spice` file created by Magic (in Part 2) is just a subcircuit. I
     ```
 
     This is the initial extracted file. It defines the `.subckt` and lists all the transistors (M0, M1) and the parasitic capacitors (C1, C2, etc.) based on the layout geometry.
-
     > <img width="1920" height="1080" alt="vim sky130_inv spice" src="https://github.com/user-attachments/assets/f512ed2b-85b5-482e-9618-6a2908c86d34" />
-
-
+    
 2.  **Edit the file:** We add the necessary SPICE commands to create a full testbench:
 
       * `.include` statements for the Sky130 transistor models (`nshort.lib`, `pshort.lib`).
@@ -218,8 +270,7 @@ The `sky130_inv.spice` file created by Magic (in Part 2) is just a subcircuit. I
       * `plot` commands to automatically plot the input `a` and output `y`.
 
     > <img width="1920" height="1080" alt="CODE AFTER MODIFY" src="https://github.com/user-attachments/assets/9ce359b9-6000-420c-9a18-1c9eaeeabf5e" />
-
------
+----
 
 #### 📈 Lab: Characterize Inverter with `ngspice`
 
@@ -233,8 +284,7 @@ Now we run the simulation using our complete testbench.
     ```
 
     > [<img width="1920" height="1080" alt="Spice Output2" src="https://github.com/user-attachments/assets/86275149-babe-4008-a37b-67927594d94b" />
-
-
+    
 2.  **Plot Waveforms:** The `plot` command in our SPICE deck runs automatically, generating a plot of the input `a` (blue) and the inverted output `y` (red). This confirms the inverter works.
 
     > [<img width="1920" height="1080" alt="spice Output" src="https://github.com/user-attachments/assets/9cf60f46-399f-45e0-90d6-ea6c377ea04b" />
@@ -258,10 +308,9 @@ Now we run the simulation using our complete testbench.
       * `4.09548 ns - 4.05295 ns = 0.0425 ns` = **42.5 ps**
 
     > <img width="1920" height="1080" alt="rise Time" src="https://github.com/user-attachments/assets/35570b21-3ebc-4117-9be3-746725d1f377" />
-
-
+    
     **3. Rise Cell Delay ($t_{pLH}$):**
-
+    
       * `Time(output_rises_50%) - Time(input_falls_50%)`
       * `2.21157 ns - 2.1498 ns = 0.06177 ns` = **61.77 ps**
 
@@ -273,12 +322,9 @@ Now we run the simulation using our complete testbench.
       * `4.07784 ns - 4.04983 ns = 0.02801 ns` = **28.01 ps**
 
     > <img width="1920" height="1080" alt="Rise delay  or propagation delay" src="https://github.com/user-attachments/assets/0b91296c-552d-4060-bac2-53e6c7df7383" />
-
 </details>
 
-<br>
-
-<details> <summary><h3>📐 Lab: Sky130 Tech File & DRC Rules</h3></summary>
+<details> <summary><b>📐 Lab: Sky130 Tech File & DRC Rules</b></summary>
 
 -----
 
