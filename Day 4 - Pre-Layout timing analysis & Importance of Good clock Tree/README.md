@@ -325,19 +325,7 @@ Zoom view shows:
 * ✔️ All cells aligned on **li1 routing tracks**
 
 ---
-Below is your **clean, professional, fully-structured Part-B**, using **your images**, **your SDC**, **your STA config**, and written exactly in the style you asked for:
-✔ professional
-✔ compact
-✔ no “why we need this” sentences
-✔ only importance explained
-✔ icons instead of ticks
-✔ placeholders for images (you will insert)
-
----
-
 ## 🚀 **Part-B : Timing Analysis with Ideal Clocks & Setup-Time Optimization**
-
----
 
 ### 📘 **1. Timing Analysis with Ideal Clocks (OpenSTA)**
 
@@ -381,11 +369,7 @@ Updated setup equation:
 
 This uncertainty margin must always be reserved inside STA.
 
----
-
 ### ⚙️ **4. Running OpenSTA for Post-Synth Timing Analysis**
-
----
 
 #### 📂 **4.1 First Synthesis Run (Default Settings)**
 
@@ -399,8 +383,6 @@ OpenLane performs an initial synthesis + STA evaluation.
 | **TNS** | –711.59 ns | Accumulated violation |
 
 Negative slack indicates critical paths failing timing.
-
----
 
 ### ⚡ **4.2 Timing-Optimized Synthesis**
 
@@ -525,12 +507,6 @@ report_checks -path_delay min_max -fields {slew trans net cap input_pin}
 report_tns
 report_wns
 ```
-
----
-
-Here is **ONLY the STA + Timing ECO section**, rewritten cleanly and professionally, using **your commands + your images exactly**.
-This is ready to append at the end of your Part-A README.
-
 ---
 
 ### ⚡ **5. Static Timing Analysis Using OpenSTA**
@@ -560,8 +536,6 @@ This shows:
 
 These results confirm that timing needs correction.
 
----
-
 ### 🛠️ **6. Timing ECO (Engineering Change Order)**
 
 Timing ECO focuses on strengthening cells on critical paths to reduce delay.
@@ -577,8 +551,6 @@ report_net -connections _11672_
 > 📸 <img width="1920" height="1080" alt="26 14481 or gate slew wrong" src="https://github.com/user-attachments/assets/c0020f71-a2b3-4920-9c0b-19e1df39b541" />
 
 This shows that net ***11672*** is driven by a **sky130_fd_sc_hd__or2_2** gate, which is too weak for the load (4 fanouts).
-
----
 
 #### 🔧 **6.2 Replace Weak Cells With Higher-Drive Cells**
 
@@ -605,8 +577,6 @@ replace_cell _15227_ sky130_fd_sc_hd__or2_4
 
 These replacements increase drive strength, reduce output slew, and reduce path delay.
 
----
-
 #### 📉 **6.3 Re-run Timing to Check Improvement**
 
 ```bash
@@ -624,7 +594,6 @@ Even though the path still violates timing, the slack has **reduced by more than
 
 > 📸 <img width="1920" height="1080" alt="28 slack reduced to 22 " src="https://github.com/user-attachments/assets/2ed22a4c-1fe2-4d6a-9559-744d2b5abb8f" />
 
----
 
 ### ✔️ **Summary of Part-B**
 
@@ -632,5 +601,412 @@ Even though the path still violates timing, the slack has **reduced by more than
 * Setup time, clock delay, and load determine path feasibility.
 * Weak cells cause large delays → replaced using **replace_cell**.
 * Slack improved after ECO.
+
+## ⚙️ **C. Clock Tree Synthesis (CTS) Using TritonCTS & Signal Integrity**
+
+Clock distribution is one of the most sensitive parts of the chip. The goal is simple:
+
+**Deliver the clock to every flip-flop at the same time (zero skew).**
+
+But due to routing distance, RC delay, crosstalk, and loading, the clock never naturally reaches all points identically.
+CTS solves this.
+
+### 🕒 **C.1 Clock Tree Routing & Skew Problem**
+
+Let’s assume **CLK1** is directly wired to flip-flops:
+
+* FF1 and FF2 in Stage 1
+* FF1 in Stage 3
+* FF2 in Stage 4
+
+>📸<img width="1297" height="650" alt="image" src="https://github.com/user-attachments/assets/cb0568b6-b162-4894-9d64-6e0e3c635ff6" />
+
+If FF2 is physically farther than FF1, its clock arrives later:
+
+* t₂ > t₁
+* Skew = t₂ – t₁
+
+**Skew must be as close to 0 ps as possible**.
+
+> 📸 <img width="716" height="247" alt="image" src="https://github.com/user-attachments/assets/d8b35de7-2c0a-484c-b1b7-4bebd423f79f" />
+
+### 🧭 **C.2 Improving the Tree (H-Tree Approach)**
+
+A *bad* clock tree gives different distances → high skew.
+
+To fix it, CTS places the clock root at a more central/“midpoint” location so all branches have equal length.
+
+>📸 *<img width="881" height="632" alt="image" src="https://github.com/user-attachments/assets/4b3b3d84-c6d3-4770-b6c9-33b26035a100" />
+
+This reduces the difference in arrival times for CLK1 and CLK2 paths.
+
+### 🔁 **C.3 Why Buffering is Needed (RC Delay Problem)**
+
+Long clock wires behave like RC networks:
+
+* Resistance slows transitions
+* Capacitance filters (rounds) waveforms
+* Clock arrives distorted → violates setup/hold
+
+>📸 <img width="878" height="498" alt="image" src="https://github.com/user-attachments/assets/66ae243a-b4c2-440c-99f0-d8ad602864de" />
+
+As wire length increases, the **output waveform does not match the input**.
+
+#### ✔️ Solution: Clock Repeaters (Buffers)
+
+Clock buffers are inserted to strengthen the waveform.
+Unlike data path buffers, **clock buffers maintain equal rise/fall time** to avoid duty-cycle distortion.
+
+First, the original long clock path is removed.
+Then repeaters are inserted at optimal breakpoints.
+
+>📸 <img width="886" height="635" alt="image" src="https://github.com/user-attachments/assets/604451e1-bbfe-42d1-8dac-c8a03ebda2ee" />
+
+These ensure:
+
+* Sharper edges
+* Reduced RC delay
+* Lower skew
+
+### ⚡ **C.4 Crosstalk & Clock Net Shielding**
+
+Even with a good tree, **crosstalk** can corrupt the clock.
+
+#### Aggressor → Victim Problem
+
+If an aggressor net switches close to the clock net, the coupling capacitor CM injects noise:
+
+* Glitches
+* Delta delay (clock gets delayed or sped up)
+
+> 📸 <img width="703" height="343" alt="image" src="https://github.com/user-attachments/assets/b5c631cc-7619-42d4-91a4-3b0ba9ba023e" />
+
+This causes skew to become non-zero again.
+
+📸 *insert 5cc4bb51-1e3e-439c-93f9-20b047ab8ef8.png*
+
+#### ✔️ Solution: Shielding
+
+Insert a grounded (or VDD) wire between aggressor and victim:
+
+* Breaks coupling capacitance
+* Shields do not switch
+* Protects the clock from noise
+
+Thus skew remains controlled.
+
+>📸 <img width="1237" height="667" alt="image" src="https://github.com/user-attachments/assets/5906c084-0ddf-4d54-b438-db11fbd4d42b" />
+
+
+### 🧪 **C.5 Lab: Running CTS in OpenLANE (Using Fixed Netlist)**
+
+After timing ECO fixes, a new netlist is created.
+We must replace the old netlist with this updated one.
+
+>📸 <img width="1920" height="1080" alt="28 Slack Violated small reduce new " src="https://github.com/user-attachments/assets/aeb78cd7-e976-41e6-8e42-a37e283848ec" />
+
+>📸 <img width="1920" height="1080" alt="31 again replace cells in opensta" src="https://github.com/user-attachments/assets/4cd73c0e-3bea-4647-ab69-6f7719db2c68" />
+
+>📸 <img width="1920" height="1080" alt="32 slack met at last" src="https://github.com/user-attachments/assets/f4f69cf8-f59f-41dc-a054-9e51c95402d4" />
+
+
+#### **Step 1 — Go to synthesis results**
+
+```
+cd Desktop/work/tools/openlane_working_dir/openlane/designs/picorv32a/runs/02-04_05-27/results/synthesis/
+ls -ltr
+cp picorv32a.synthesis.v picorv32a.synthesis_old.v
+ls -ltr
+```
+
+>📸 <img width="1920" height="1080" alt="34 prepare design" src="https://github.com/user-attachments/assets/795027db-4ecc-49d2-82fb-542255adea51" />
+
+#### **Step 2 — Run synthesis → floorplan → placement → CTS**
+
+Inside OpenLane interactive:
+
+```
+prep -design picorv32a -tag 02-04_05-27 -overwrite
+set lefs [glob $::env(DESIGN_DIR)/src/*.lef]
+add_lefs -src $lefs
+
+set ::env(SYNTH_STRATEGY) "DELAY 3"
+set ::env(SYNTH_SIZING) 1
+
+run_synthesis
+init_floorplan
+place_io
+tap_decap_or
+run_placement
+```
+
+If any CTS-related error:
+
+```
+unset ::env(LIB_CTS)
+```
+
+Now run CTS:
+
+```
+run_cts
+```
+
+>📸 <img width="1920" height="1080" alt="35 make this new netlist to run" src="https://github.com/user-attachments/assets/d1feff95-c05b-4728-adcc-66d6f860077c" />
+
+>📸 <img width="1920" height="1080" alt="38 cts success" src="https://github.com/user-attachments/assets/7df7f57a-73af-4969-940e-3db121e180ed" />
+
+
+A new CTS DEF file is created:
+
+```
+/results/cts/picorv32a.cts.def
+```
+
+
+### 🛠️ **C.6 Verifying CTS Using OpenROAD**
+
+OpenROAD lets you load the CTS results and view the clock buffers.
+
+#### Launch OpenROAD:
+
+```
+openroad
+```
+
+#### Load input files:
+
+```
+read_lef /openLANE_flow/designs/picorv32a/runs/02-04_05-27/tmp/merged.lef
+read_def /openLANE_flow/designs/picorv32a/runs/02-04_05-27/results/cts/picorv32a.cts.def
+```
+
+#### Create database:
+
+```
+write_db pico_cts.db
+```
+
+The DB file is now present in your OpenLane directory.
+
+## **🚀 PART-D — Timing Analysis With Real Clocks (Using OpenSTA)**
+
+
+### **🔶 1. Why Timing Changes After CTS?**
+
+Before CTS, timing is analyzed using an **ideal clock**:
+
+* Clock reaches every FF at time **t = 0**
+* No buffer delays
+* No wire delays
+* No skew
+
+After CTS:
+
+* Clock travels through **buffers + wires**
+* The path delay to each FF is **different**
+* This creates **insertion delay (Δ)** and **clock skew**
+
+👉 **Therefore, real timing equations must include Δ1, Δ2, Skew, Setup, Hold, and Uncertainty.**
+
+### **🔶 2. Setup Timing Analysis Using Real Clocks**
+
+When a **real clock tree** is used, the clock reaches:
+
+* Launch flop after delay = **Δ1 = (1 + 2)**
+* Capture flop after delay = **Δ2 = (1 + 3 + 4)**
+
+#### ▶ Ideal clock equation
+
+[
+\theta < T
+]
+
+### ▶ Real clock equation
+
+[
+(\theta + \Delta_1) < (T + \Delta_2)
+]
+
+> 📸 <img width="1201" height="692" alt="image" src="https://github.com/user-attachments/assets/599b2c21-171e-4827-8af4-ea545f1f29df" />
+
+Δ1 and Δ2 represent **clock arrival differences**.
+Clock skew = **|Δ1 − Δ2|**
+
+> 📸 <img width="1227" height="633" alt="image" src="https://github.com/user-attachments/assets/06948596-6045-4fbc-a132-ce90b3732d58" />
+
+#### Including setup time (S) & uncertainty (SU):
+
+[
+(\theta + \Delta_1) < (T + \Delta_2 - S - SU)
+]
+
+Where:
+
+* θ = data path delay
+* Δ1 = clock arrival at launch FF
+* Δ2 = clock arrival at capture FF
+* S = setup time
+* SU = uncertainty
+
+> Data Arrival Time = **θ + Δ1**
+> Data Required Time = **T + Δ2 − S − SU**
+
+### **🔶 3. Hold Timing Analysis Using Real Clocks**
+
+Hold check verifies:
+**Data must NOT change immediately after the capturing clock edge.**
+
+Ideal clock condition:
+
+[
+\theta > H
+]
+
+> 📸 <img width="1228" height="686" alt="image" src="https://github.com/user-attachments/assets/f077b1f3-2658-40f7-ae84-2ed552ca4779" />
+
+After real CTS:
+
+* Launch FF receives clock after **Δ1**
+* Capture FF receives clock after **Δ2**
+
+Thus hold equation becomes:
+
+[
+(\theta + \Delta_1) > (H + \Delta_2)
+]
+
+> 📸 <img width="1107" height="600" alt="image" src="https://github.com/user-attachments/assets/c66fae1c-40dc-47ec-a488-6bf9c178f6a9" />
+
+Including hold uncertainty (HU):
+
+[
+(\theta + \Delta_1) > (H + \Delta_2 + HU)
+]
+
+
+### **🔶 4. Impact of Clock Skew**
+
+Clock skew = **Δ1 – Δ2**
+
+> 📸 <img width="1187" height="685" alt="image" src="https://github.com/user-attachments/assets/be9fd8c3-bac2-4ca2-b6c3-9d592752f7b2" />
+
+**Positive skew** (capture clock is late) → setup improves, hold worsens
+**Negative skew** (capture clock early) → setup worsens, hold improves
+
+> 📸 <img width="448" height="123" alt="image" src="https://github.com/user-attachments/assets/691e72c8-32c8-4af8-96be-24dc466587bf" />
+
+> 📸 <img width="467" height="98" alt="image" src="https://github.com/user-attachments/assets/bbe8ed15-0dac-4cd7-8e17-2caea2423d43" />
+
+### **🔶 5. LAB — Verifying CTS Output**
+
+First, load the CTS DEF and create OpenROAD DB.
+
+#### ✔ Commands
+
+```tcl
+openroad
+read_lef /openLANE_flow/designs/picorv32a/runs/02-04_05-27/tmp/merged.lef
+read_def /openLANE_flow/designs/picorv32a/runs/02-04_05-27/results/cts/picorv32a.cts.def
+write_db pico_cts.db
+```
+
+This creates **pico_cts.db**, which stores placement + routing + CTS tree.
+
+### **🔶 6. LAB — Timing Analysis With Real Clocks Using OpenSTA**
+
+Load database + netlist + liberty + SDC:
+
+```tcl
+read_db pico_cts.db
+read_verilog /openLANE_flow/designs/picorv32a/runs/02-04_05-27/results/synthesis/picorv32a.synthesis_cts.v
+read_liberty $::env(LIB_SYNTH_COMPLETE)
+link_design picorv32a
+read_sdc /openLANE_flow/designs/picorv32a/src/my_base.sdc
+set_propagated_clock [all_clocks]
+```
+
+Generate full timing report:
+
+```tcl
+report_checks -path_delay min_max -fields {slew trans net cap input_pins} -format full_clock_expanded -digits 4
+```
+
+> 📸 *Your 3 OpenSTA timing screenshots*
+
+These results now include:
+
+* RC parasitics
+* Clock insertion delays
+* Clock skew
+* CTS buffers
+* Real setup and hold slack
+
+### **🔶 7. LAB — Changing CTS Buffer List**
+
+Remove the smallest buffer:
+
+```tcl
+set ::env(CTS_CLK_BUFFER_LIST) [lreplace $::env(CTS_CLK_BUFFER_LIST) 0 0]
+echo $::env(CTS_CLK_BUFFER_LIST)
+```
+
+Set placement DEF as the active DEF:
+
+```tcl
+set ::env(CURRENT_DEF) /openLANE_flow/designs/picorv32a/runs/02-04_05-27/results/placement/picorv32a.placement.def
+```
+
+Run CTS again:
+
+```tcl
+run_cts
+echo $::env(CTS_CLK_BUFFER_LIST)
+```
+
+> <img width="1920" height="1080" alt="40 Final Cts" src="https://github.com/user-attachments/assets/d9c03cf4-55b5-4653-bbdc-1385eca0106c" />
+
+This creates a **new clock tree** with stronger buffers.
+
+### **🔶 8. LAB — Observing Impact of Bigger CTS Buffers**
+
+Reload everything:
+
+```tcl
+openroad
+read_lef /openLANE_flow/designs/picorv32a/runs/02-04_05-27/tmp/merged.lef
+read_def /openLANE_flow/designs/picorv32a/runs/02-04_05-27/results/cts/picorv32a.cts.def
+write_db pico_cts1.db
+read_db pico_cts.db
+read_verilog /openLANE_flow/designs/picorv32a/runs/02-04_05-27/results/synthesis/picorv32a.synthesis_cts.v
+read_liberty $::env(LIB_SYNTH_COMPLETE)
+link_design picorv32a
+read_sdc /openLANE_flow/designs/picorv32a/src/my_base.sdc
+set_propagated_clock [all_clocks]
+```
+> <img width="1920" height="1080" alt="41 final openroad commands" src="https://github.com/user-attachments/assets/d9a4bb40-a032-4d04-b290-90a699671747" />
+
+Generate reports:
+
+```tcl
+report_checks -path_delay min_max -fields {slew trans net cap input_pins} -format full_clock_expanded -digits 4
+report_clock_skew -hold
+report_clock_skew -setup
+exit
+```
+
+> <img width="1920" height="1080" alt="final" src="https://github.com/user-attachments/assets/d35e9896-86ea-469c-b0e8-0a970fc738fe" />
+
+### **🔶 9. Observations**
+
+#### ✔ Stronger buffers (clkbuf_2, clkbuf_4) give:
+
+| Parameter   | Effect                            |
+| ----------- | --------------------------------- |
+| Setup slack | **Improves** (faster clock edges) |
+| Hold slack  | May **worsen**                    |
+| Area        | **Increases**                     |
+| Power       | **Increases**                     |
+| Skew        | Often **reduces**                 |
 
 ---
